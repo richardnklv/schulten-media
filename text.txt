@@ -1,0 +1,9 @@
+- sidebar hamburger menu
+    - projects
+        - add multiple people
+        - edit projects
+    - notifications
+        - make them work 
+    - home
+
+- progress bar for tasks

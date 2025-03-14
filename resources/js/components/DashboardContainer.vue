@@ -1,64 +1,27 @@
-<!-- resources/js/components/Dashboard.vue -->
 <template>
   <div class="zen-app">
     <div class="zen-container" :class="{ 'detail-open': selectedTask && isMobile }">
-      <!-- Project Sidebar -->
-      <div class="project-sidebar" :class="{ 'collapsed': isSidebarCollapsed }">
-        <!-- Toggle button -->
-        <button class="sidebar-toggle" @click="toggleSidebar">
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
-            <path d="M16 18l-6-6 6-6" v-if="!isSidebarCollapsed"></path>
-            <path d="M9 18l6-6-6-6" v-else></path>
-          </svg>
-        </button>
-        
-        <!-- Sidebar content -->
-        <div class="sidebar-content" v-if="!isSidebarCollapsed">
-          <div class="sidebar-header">
-            <h3>Projects</h3>
-            <button class="add-btn" @click="showAddProjectForm = true">
-              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-            </button>
-          </div>
-          
-          <div class="projects-list">
-            <div 
-              v-for="project in projects" 
-              :key="project.id" 
-              :class="['project-item', { 'active': selectedProjectId === project.id }]"
-              @click="selectProject(project)"
-            >
-              {{ project.title }}
-            </div>
-            
-            <div v-if="projects.length === 0" class="empty-projects">
-              No projects available
-            </div>
-          </div>
-          
-          <div class="sidebar-section">
-            <h4>Notifications</h4>
-            <div class="empty-notifications">
-              No new notifications
-            </div>
-          </div>
-        </div>
+      <!-- Left Panel - Project Sidebar -->
+      <div class="left-panel" :class="{ 'hidden': selectedTask && isMobile, 'collapsed': sidebarCollapsed }" :style="{ width: sidebarCollapsed ? '60px' : leftPanelWidth + 'px' }">
+        <ProjectSidebar 
+          :user="user"
+          @toggle-sidebar="toggleSidebar"
+          @select-project="filterTasksByProject"
+        />
       </div>
       
-      <!-- Resizable Splitter for Project Sidebar -->
+      <!-- Resizable Splitter for Left/Middle -->
       <ResizableSplitter 
-        v-if="!isMobile && !isSidebarCollapsed" 
-        @resize="handleProjectSidebarResize" 
+        v-if="!isMobile && !sidebarCollapsed" 
+        @resize="handleResize"
+        class="left-splitter"
       />
       
-      <!-- Task Panel (now middle panel) -->
+      <!-- Middle Panel - Task Panel -->
       <div class="middle-panel" :class="{ 'hidden': selectedTask && isMobile }" :style="{ width: middlePanelWidth + 'px' }">
         <TaskPanel 
           :user-name="user.name"
-          :tasks="filteredTasksByProject"
+          :tasks="filteredTasks"
           :all-tasks="tasks"
           :selected-priority="selectedPriority"
           :selected-status="selectedStatus"
@@ -68,14 +31,16 @@
           @select-task="selectTask"
           @update-priority="updatePriority"
           @update-status="updateStatus"
+          @update-task-priority="updateTaskPriority"
           @add-task="showAddTaskForm = true"
         />
       </div>
       
-      <!-- Resizable Splitter for Task Panel -->
+      <!-- Resizable Splitter for Middle/Right -->
       <ResizableSplitter 
-        v-if="!isMobile && (!selectedTask || !isMobile)" 
-        @resize="handleTaskPanelResize" 
+        v-if="!isMobile" 
+        @resize="handleRightResize"
+        class="right-splitter"
       />
       
       <!-- Right Panel - Task Details & Progress -->
@@ -86,6 +51,7 @@
           :is-mobile="isMobile"
           @close-task="selectedTask = null"
           @complete-task="markAsCompleted"
+          @update-task="updateTask"
           @add-comment="addNewComment"
         />
       </div>
@@ -151,41 +117,13 @@
         </div>
       </div>
     </div>
-    
-    <!-- Add Project Modal -->
-    <div class="modal" v-if="showAddProjectForm">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>Add New Project</h2>
-          <button class="close-modal-btn" @click="showAddProjectForm = false">&times;</button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="addProject">
-            <div class="form-group">
-              <label for="project-title">Title</label>
-              <input id="project-title" type="text" v-model="newProject.title" required>
-            </div>
-            
-            <div class="form-group">
-              <label for="project-description">Description</label>
-              <textarea id="project-description" v-model="newProject.description"></textarea>
-            </div>
-            
-            <div class="form-actions">
-              <button type="button" class="cancel-btn" @click="showAddProjectForm = false">Cancel</button>
-              <button type="submit" class="submit-btn">Create Project</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script>
-// Add this import at the top with your other imports
 import authService from '../services/authService.js';
 import apiClient from '../services/api.js';
+import ProjectSidebar from './sidebar/ProjectSidebar.vue';
 import TaskPanel from './TaskPanel.vue';
 import DetailPanel from './DetailPanel.vue';
 import ResizableSplitter from './ResizableSplitter.vue';
@@ -196,8 +134,9 @@ import commentService from '../services/commentService.js';
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 
 export default {
-  name: 'Dashboard',
+  name: 'DashboardContainer',
   components: {
+    ProjectSidebar,
     TaskPanel,
     DetailPanel,
     ResizableSplitter
@@ -207,23 +146,21 @@ export default {
     const tasks = ref([]);
     const projects = ref([]);
     const users = ref([]);
+    const sidebarCollapsed = ref(false);
     
     const selectedTask = ref(null);
-    const selectedPriority = ref('Must be done');
+    const selectedPriority = ref('all'); // Changed default to 'all'
     const selectedStatus = ref('all');
-    const selectedProjectId = ref(null);
-    
+    const selectedProject = ref(null);
     const taskComments = ref([]);
     const showAddTaskForm = ref(false);
-    const showAddProjectForm = ref(false);
     const isMobile = ref(false);
-    const isSidebarCollapsed = ref(false);
     
     // Panel resizing state
-    const projectSidebarWidth = ref(200); // Default width for project sidebar
-    const middlePanelWidth = ref(window.innerWidth * 0.25); // Adjust default width
-    const MIN_PANEL_WIDTH = 250; // Minimum width in pixels
+    const MIN_PANEL_WIDTH = 200; // Minimum width in pixels
     let MAX_PANEL_WIDTH = window.innerWidth * 0.6; // Maximum width (60% of window)
+    const leftPanelWidth = ref(Math.max(MIN_PANEL_WIDTH, Math.min(window.innerWidth * 0.15, MAX_PANEL_WIDTH))); // Default to 15% of window width (reduced from 20%)
+    const middlePanelWidth = ref(Math.max(MIN_PANEL_WIDTH, Math.min(window.innerWidth * 0.40, MAX_PANEL_WIDTH))); // Default to 40% of window width
     
     const newTask = ref({
       title: '',
@@ -235,11 +172,6 @@ export default {
       assignee_id: ''
     });
     
-    const newProject = ref({
-      title: '',
-      description: ''
-    });
-    
     // Current user (would come from auth)
     const user = ref({
       id: 1,
@@ -249,6 +181,7 @@ export default {
     
     // Constants
     const priorities = [
+      { value: 'all', label: 'All' },
       { value: 'Must be done', label: 'Must Do' },
       { value: 'Important', label: 'Important' },
       { value: 'Good to have', label: 'Nice to Have' }
@@ -263,9 +196,15 @@ export default {
     
     // Computed
     const filteredTasks = computed(() => {
-      return tasks.value.filter(task => {
-        // Filter by priority
-        if (task.priority !== selectedPriority.value) {
+      // First filter tasks
+      const filtered = tasks.value.filter(task => {
+        // Always filter by project if a project is selected
+        if (selectedProject.value && task.project_id !== selectedProject.value) {
+          return false;
+        }
+        
+        // Filter by priority (skip if 'all' is selected)
+        if (selectedPriority.value !== 'all' && task.priority !== selectedPriority.value) {
           return false;
         }
         
@@ -276,17 +215,26 @@ export default {
         
         return true;
       });
-    });
-    
-    // New computed property to filter by project
-    const filteredTasksByProject = computed(() => {
-      return filteredTasks.value.filter(task => {
-        // Filter by project if one is selected
-        if (selectedProjectId.value && task.project_id !== selectedProjectId.value) {
-          return false;
+      
+      // Define priority order for sorting
+      const priorityOrder = {
+        'Must be done': 1,
+        'Important': 2,
+        'Good to have': 3
+      };
+      
+      // Sort by priority and then by due date within each priority
+      return filtered.sort((a, b) => {
+        // First sort by priority
+        const priorityA = priorityOrder[a.priority] || 999;
+        const priorityB = priorityOrder[b.priority] || 999;
+        
+        if (priorityA !== priorityB) {
+          return priorityA - priorityB;
         }
         
-        return true;
+        // Then sort by due date
+        return new Date(a.due_date) - new Date(b.due_date);
       });
     });
     
@@ -315,8 +263,20 @@ export default {
         window.location.href = '/login';
       }
     };
+
+    const handleResize = (deltaX) => {
+      const newWidth = leftPanelWidth.value + deltaX;
+      
+      // Enforce minimum and maximum widths
+      if (newWidth >= MIN_PANEL_WIDTH && newWidth <= MAX_PANEL_WIDTH) {
+        leftPanelWidth.value = newWidth;
+        
+        // Store the preference in localStorage for persistence
+        localStorage.setItem('leftPanelWidth', newWidth);
+      }
+    };
     
-    const handleTaskPanelResize = (deltaX) => {
+    const handleRightResize = (deltaX) => {
       const newWidth = middlePanelWidth.value + deltaX;
       
       // Enforce minimum and maximum widths
@@ -326,23 +286,6 @@ export default {
         // Store the preference in localStorage for persistence
         localStorage.setItem('middlePanelWidth', newWidth);
       }
-    };
-    
-    const handleProjectSidebarResize = (deltaX) => {
-      const newWidth = projectSidebarWidth.value + deltaX;
-      
-      // Enforce minimum and maximum widths
-      if (newWidth >= 180 && newWidth <= 300) {
-        projectSidebarWidth.value = newWidth;
-        
-        // Store the preference in localStorage for persistence
-        localStorage.setItem('projectSidebarWidth', newWidth);
-      }
-    };
-    
-    const toggleSidebar = () => {
-      isSidebarCollapsed.value = !isSidebarCollapsed.value;
-      localStorage.setItem('sidebarCollapsed', isSidebarCollapsed.value);
     };
     
     const fetchTasks = async () => {
@@ -378,17 +321,6 @@ export default {
     
     const updateStatus = (status) => {
       selectedStatus.value = status;
-    };
-    
-    const selectProject = (project) => {
-      if (selectedProjectId.value === project.id) {
-        // Clicking the already selected project deselects it
-        selectedProjectId.value = null;
-      } else {
-        selectedProjectId.value = project.id;
-        // Pre-set the project_id in the new task form
-        newTask.value.project_id = project.id;
-      }
     };
     
     const selectTask = async (task) => {
@@ -435,6 +367,25 @@ export default {
       }
     };
     
+    const updateTask = async (updatedTask) => {
+      try {
+        // Task has already been updated in the API by the TaskDetails component
+        
+        // Update task in the list
+        const index = tasks.value.findIndex(t => t.id === updatedTask.id);
+        if (index !== -1) {
+          tasks.value[index] = updatedTask;
+        }
+        
+        // Update selected task if it's the same
+        if (selectedTask.value && selectedTask.value.id === updatedTask.id) {
+          selectedTask.value = updatedTask;
+        }
+      } catch (error) {
+        console.error('Error updating task:', error);
+      }
+    };
+    
     const addTask = async () => {
       try {
         const response = await taskService.create(newTask.value);
@@ -446,7 +397,7 @@ export default {
         newTask.value = {
           title: '',
           description: '',
-          project_id: selectedProjectId.value || projects.value[0]?.id || 1,
+          project_id: 1,
           priority: 'Must be done',
           status: 'To Do',
           due_date: new Date().toISOString().split('T')[0],
@@ -459,28 +410,6 @@ export default {
       }
     };
     
-    const addProject = async () => {
-      try {
-        const response = await projectService.create(newProject.value);
-        
-        // Add the created project to the list
-        projects.value.push(response.data);
-        
-        // Select the newly created project
-        selectedProjectId.value = response.data.id;
-        
-        // Reset form and close modal
-        newProject.value = {
-          title: '',
-          description: ''
-        };
-        
-        showAddProjectForm.value = false;
-      } catch (error) {
-        console.error('Error adding project:', error);
-      }
-    };
-    
     // Check screen size for responsive design
     const checkScreenSize = () => {
       isMobile.value = window.innerWidth < 768;
@@ -490,12 +419,23 @@ export default {
       
       // Ensure panel widths are within bounds after resize
       if (!isMobile.value) {
+        // Check left panel width
+        if (leftPanelWidth.value > MAX_PANEL_WIDTH) {
+          leftPanelWidth.value = MAX_PANEL_WIDTH;
+        }
+
+        // Check middle panel width
         if (middlePanelWidth.value > MAX_PANEL_WIDTH) {
           middlePanelWidth.value = MAX_PANEL_WIDTH;
         }
         
-        if (projectSidebarWidth.value > 300) {
-          projectSidebarWidth.value = 300;
+        // Ensure minimum widths
+        if (leftPanelWidth.value < MIN_PANEL_WIDTH) {
+          leftPanelWidth.value = MIN_PANEL_WIDTH;
+        }
+        
+        if (middlePanelWidth.value < MIN_PANEL_WIDTH) {
+          middlePanelWidth.value = MIN_PANEL_WIDTH;
         }
       }
     };
@@ -514,20 +454,14 @@ export default {
         window.addEventListener('resize', checkScreenSize);
         
         // Load saved panel width preference from localStorage
-        const savedMiddlePanelWidth = localStorage.getItem('middlePanelWidth');
-        if (savedMiddlePanelWidth && !isMobile.value) {
-          middlePanelWidth.value = Math.min(Math.max(parseInt(savedMiddlePanelWidth), MIN_PANEL_WIDTH), MAX_PANEL_WIDTH);
+        const savedWidth = localStorage.getItem('leftPanelWidth');
+        if (savedWidth && !isMobile.value) {
+          leftPanelWidth.value = Math.min(Math.max(parseInt(savedWidth), MIN_PANEL_WIDTH), MAX_PANEL_WIDTH);
         }
         
-        // Load saved sidebar width and collapsed state
-        const savedSidebarWidth = localStorage.getItem('projectSidebarWidth');
-        if (savedSidebarWidth && !isMobile.value) {
-          projectSidebarWidth.value = Math.min(Math.max(parseInt(savedSidebarWidth), 180), 300);
-        }
-        
-        const savedSidebarState = localStorage.getItem('sidebarCollapsed');
-        if (savedSidebarState !== null) {
-          isSidebarCollapsed.value = savedSidebarState === 'true';
+        const savedMiddleWidth = localStorage.getItem('middlePanelWidth');
+        if (savedMiddleWidth && !isMobile.value) {
+          middlePanelWidth.value = Math.min(Math.max(parseInt(savedMiddleWidth), MIN_PANEL_WIDTH), MAX_PANEL_WIDTH);
         }
       });
     });
@@ -537,6 +471,39 @@ export default {
       window.removeEventListener('resize', checkScreenSize);
     });
     
+    // Toggle sidebar method
+    const toggleSidebar = (collapsed) => {
+      sidebarCollapsed.value = collapsed;
+    };
+    
+    // Filter tasks by project
+    const filterTasksByProject = (projectId) => {
+      selectedProject.value = projectId;
+    };
+    
+    // Method to update a task's priority
+    const updateTaskPriority = async (updatedTask) => {
+      try {
+        // API call to update the task
+        const response = await taskService.update(updatedTask.id, updatedTask);
+        
+        // Update the task in our local array
+        const index = tasks.value.findIndex(t => t.id === updatedTask.id);
+        if (index !== -1) {
+          tasks.value[index] = updatedTask;
+        }
+        
+        // If this is the currently selected task, update that as well
+        if (selectedTask.value && selectedTask.value.id === updatedTask.id) {
+          selectedTask.value = updatedTask;
+        }
+      } catch (error) {
+        console.error('Error updating task priority:', error);
+        // Show a simple notification
+        alert('Failed to update task priority. Please try again.');
+      }
+    };
+    
     return {
       tasks,
       projects,
@@ -544,32 +511,30 @@ export default {
       selectedTask,
       selectedPriority,
       selectedStatus,
-      selectedProjectId,
+      selectedProject,
       taskComments,
       showAddTaskForm,
-      showAddProjectForm,
       newTask,
-      newProject,
       user,
       priorities,
       statuses,
       filteredTasks,
-      filteredTasksByProject,
       isMobile,
-      isSidebarCollapsed,
+      leftPanelWidth,
       middlePanelWidth,
-      projectSidebarWidth,
+      sidebarCollapsed,
       selectTask,
-      selectProject,
       updatePriority,
       updateStatus,
       addNewComment,
       markAsCompleted,
+      updateTask,
       addTask,
-      addProject,
-      handleTaskPanelResize,
-      handleProjectSidebarResize,
+      handleResize,
+      handleRightResize,
       toggleSidebar,
+      filterTasksByProject,
+      updateTaskPriority,
       checkAuth
     };
   }
@@ -597,128 +562,19 @@ body {
   height: 100%;
 }
 
-/* Project Sidebar */
-.project-sidebar {
-  width: 200px;
-  min-width: 50px;
-  max-width: 300px;
+.left-panel {
+  min-width: 60px;
   border-right: 1px solid #333;
-  background-color: #1a1a1a;
-  position: relative;
-  transition: width 0.2s ease;
-  display: flex;
-  flex-direction: column;
+  transition: all 0.3s ease;
 }
 
-.project-sidebar.collapsed {
-  width: 50px;
-  min-width: 50px;
+.left-panel.collapsed {
+  min-width: 60px;
+  width: 60px !important;
 }
 
-.sidebar-toggle {
-  position: absolute;
-  top: 10px;
-  right: -12px;
-  width: 24px;
-  height: 24px;
-  background-color: #333;
-  border: none;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #fff;
-  z-index: 10;
-  transition: background-color 0.2s ease;
-}
-
-.sidebar-toggle:hover {
-  background-color: #444;
-}
-
-.sidebar-content {
-  padding: 1rem;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.sidebar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.sidebar-header h3 {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #fff;
-  letter-spacing: 0.5px;
-}
-
-.add-btn {
-  width: 20px;
-  height: 20px;
-  background-color: #333;
-  border: none;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #fff;
-}
-
-.projects-list {
-  margin-bottom: 1.5rem;
-  overflow-y: auto;
-}
-
-.project-item {
-  padding: 0.6rem 0.8rem;
-  margin-bottom: 0.25rem;
-  border-radius: 6px;
-  background-color: #252525;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.project-item:hover {
-  background-color: #2a2a2a;
-}
-
-.project-item.active {
-  background-color: rgba(138, 86, 255, 0.15);
-  color: #fff;
-}
-
-.empty-projects,
-.empty-notifications {
-  text-align: center;
-  padding: 1rem;
-  color: #666;
-  font-size: 0.7rem;
-}
-
-.sidebar-section {
-  margin-top: auto;
-  padding-top: 1rem;
-  border-top: 1px solid #333;
-}
-
-.sidebar-section h4 {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: #aaa;
-  margin-bottom: 0.5rem;
-}
-
-/* Task Panel (now middle panel) */
 .middle-panel {
-  min-width: 250px;
+  min-width: 300px;
   border-right: 1px solid #333;
   transition: width 0.1s ease;
 }
@@ -726,6 +582,28 @@ body {
 .right-panel {
   flex: 1;
   overflow: hidden;
+}
+
+/* Splitter customization */
+.left-splitter, .right-splitter {
+  position: relative;
+  z-index: 10;
+}
+
+.left-splitter .splitter-handle {
+  background-color: #333;
+}
+
+.right-splitter .splitter-handle {
+  background-color: #333;
+}
+
+.left-splitter:hover .splitter-handle {
+  background-color: #8a56ff;
+}
+
+.right-splitter:hover .splitter-handle {
+  background-color: #46a9ee;
 }
 
 /* Modal */
@@ -840,15 +718,12 @@ body {
     flex-direction: column;
   }
   
-  .project-sidebar {
-    display: none;
-  }
-  
-  .middle-panel {
+  .left-panel, .middle-panel {
     width: 100% !important; /* Override inline style */
-    height: 100%;
+    height: 50%;
   }
   
+  .zen-container.detail-open .left-panel,
   .zen-container.detail-open .middle-panel {
     display: none;
   }
@@ -857,6 +732,7 @@ body {
     height: 100%;
   }
   
+  .left-panel.hidden,
   .middle-panel.hidden {
     display: none;
   }

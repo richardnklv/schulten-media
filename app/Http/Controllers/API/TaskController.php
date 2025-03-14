@@ -41,7 +41,7 @@ class TaskController extends Controller
 
         if ($request->hasFile('attachments')) {
             foreach ($request->file('attachments') as $file) {
-                $path = $file->store('attachments');
+                $path = $file->store('attachments', 'public');
                 
                 TaskAttachment::create([
                     'task_id' => $task->id,
@@ -103,5 +103,35 @@ class TaskController extends Controller
         ]);
         
         return response()->json($task, 200);
+    }
+    
+    // Method to add attachments to an existing task
+    public function addAttachments(Request $request, Task $task)
+    {
+        $request->validate([
+            'attachments' => 'required|array',
+            'attachments.*' => 'file|max:10240',
+        ]);
+        
+        $attachments = [];
+        
+        if ($request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
+                $path = $file->store('attachments', 'public');
+                
+                $attachment = TaskAttachment::create([
+                    'task_id' => $task->id,
+                    'filename' => basename($path),
+                    'original_filename' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                    'file_type' => $file->getMimeType(),
+                    'file_size' => $file->getSize(),
+                ]);
+                
+                $attachments[] = $attachment;
+            }
+        }
+        
+        return response()->json($task->load(['project', 'assignee', 'comments.user', 'attachments']), 200);
     }
 }

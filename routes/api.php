@@ -31,6 +31,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Task routes
     Route::apiResource('tasks', TaskController::class);
     Route::put('/tasks/{task}/priority', [TaskController::class, 'updatePriority']);
+    Route::post('/tasks/{task}/attachments', [TaskController::class, 'addAttachments']);
     
     // Comment routes
     Route::get('/tasks/{task}/comments', [CommentController::class, 'index']);

@@ -1,6 +1,6 @@
 import { createApp } from 'vue';
-import Dashboard from './components/Dashboard.vue';
-import Login from './components/Login.vue';
+import App from './components/App.vue';
+import router from './router';
 import axios from 'axios';
 import authService from './services/authService';
 
@@ -23,8 +23,7 @@ if (authService.isLoggedIn()) {
     axios.defaults.headers.common['Authorization'] = `Bearer ${authService.getToken()}`;
 }
 
-// Create Vue app
-const app = createApp({});
-app.component('dashboard', Dashboard);
-app.component('login', Login);
+// Create Vue app with router
+const app = createApp(App);
+app.use(router);
 app.mount('#app');
