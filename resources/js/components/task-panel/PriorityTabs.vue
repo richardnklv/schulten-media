@@ -75,7 +75,7 @@ export default {
   gap: 0.5rem;
   margin-bottom: 1.25rem;
   position: relative;
-  z-index: 110; /* Higher than the selective overlay */
+  z-index: 100; /* Higher than the selective overlay */
 }
 
 .priority-tab {

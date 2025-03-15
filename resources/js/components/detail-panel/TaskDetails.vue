@@ -40,9 +40,62 @@
           <span class="detail-value">{{ formatDate(task.due_date) }}</span>
         </div>
         
-        <div class="detail-item" v-if="task.assignee">
+        <div class="detail-item">
           <span class="detail-label">Assignee</span>
-          <span class="detail-value">{{ task.assignee.name }}</span>
+          <div class="assignee-selector">
+            <div v-if="task.assignee" class="assignees-list">
+              <div class="assignee-item">
+                <span class="assignee-avatar">{{ getInitials(task.assignee.name) }}</span>
+                <span class="assignee-name">{{ task.assignee.name }}</span>
+              </div>
+            </div>
+            <div v-else class="no-assignee">
+              <span>Unassigned</span>
+            </div>
+            
+            <button @click="toggleAssigneeDropdown" class="add-assignee-btn" title="Add assignee">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="16"></line>
+                <line x1="8" y1="12" x2="16" y2="12"></line>
+              </svg>
+            </button>
+            
+            <!-- Assignee dropdown -->
+            <div v-if="showAssigneeDropdown" class="assignee-dropdown">
+              <div class="search-container">
+                <input 
+                  type="text" 
+                  v-model="searchQuery" 
+                  placeholder="Search users..." 
+                  class="assignee-search"
+                  ref="searchInput"
+                  @input="filterUsers"
+                >
+              </div>
+              
+              <div class="assignee-list">
+                <div 
+                  v-for="user in filteredUsers" 
+                  :key="user.id" 
+                  class="assignee-option"
+                  @click="assignUser(user)"
+                >
+                  <div class="assignee-avatar">{{ getInitials(user.name) }}</div>
+                  <span class="assignee-name">{{ user.name }}</span>
+                </div>
+                
+                <div v-if="filteredUsers.length === 0 && !isLoadingUsers" class="no-results">
+                  No users found
+                </div>
+                
+                <div v-if="isLoadingUsers" class="loading-users">
+                  <div class="spinner small"></div>
+                  <span>Loading users...</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       
@@ -172,6 +225,7 @@
 <script>
 import taskService from '../../services/taskService';
 import notificationService from '../../services/notificationService';
+import userService from '../../services/userService';
 
 export default {
   name: 'TaskDetails',
@@ -196,10 +250,16 @@ export default {
   data() {
     return {
       showStatusDropdown: false,
+      showAssigneeDropdown: false,
       isUpdating: false,
       isUploading: false,
+      isLoadingUsers: false,
       filesToUpload: [],
-      availableStatuses: ['To Do', 'In Progress', 'Under Review', 'Completed']
+      searchQuery: '',
+      availableStatuses: ['To Do', 'In Progress', 'Under Review', 'Completed'],
+      users: [],
+      filteredUsers: [],
+      assignees: []
     }
   },
   emits: ['status-updated', 'task-updated'],
@@ -212,6 +272,13 @@ export default {
       const circumference = 2 * Math.PI * 45;
       return circumference - (circumference * this.progressPercentage / 100);
     }
+  },
+  mounted() {
+    document.addEventListener('click', this.handleClickOutside);
+    this.loadUsers();
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.handleClickOutside);
   },
   methods: {
     formatDate(dateString) {
@@ -253,6 +320,81 @@ export default {
     },
     toggleStatusDropdown() {
       this.showStatusDropdown = !this.showStatusDropdown;
+    },
+    toggleAssigneeDropdown() {
+      this.showAssigneeDropdown = !this.showAssigneeDropdown;
+      if (this.showAssigneeDropdown) {
+        this.$nextTick(() => {
+          if (this.$refs.searchInput) {
+            this.$refs.searchInput.focus();
+          }
+          if (this.users.length === 0) {
+            this.loadUsers();
+          }
+        });
+      }
+    },
+    getInitials(name) {
+      if (!name) return '';
+      return name.split(' ')
+        .map(part => part.charAt(0))
+        .join('')
+        .toUpperCase()
+        .substring(0, 2);
+    },
+    async loadUsers() {
+      try {
+        this.isLoadingUsers = true;
+        const response = await userService.getAll();
+        this.users = response.data;
+        this.filteredUsers = [...this.users];
+      } catch (error) {
+        console.error('Error loading users:', error);
+      } finally {
+        this.isLoadingUsers = false;
+      }
+    },
+    filterUsers() {
+      if (!this.searchQuery.trim()) {
+        this.filteredUsers = [...this.users];
+        return;
+      }
+      
+      const query = this.searchQuery.toLowerCase();
+      this.filteredUsers = this.users.filter(user => 
+        user.name.toLowerCase().includes(query) || 
+        (user.email && user.email.toLowerCase().includes(query))
+      );
+    },
+    async assignUser(user) {
+      if (this.isUpdating) return;
+      
+      // If the user is already the assignee, do nothing
+      if (this.task.assignee && this.task.assignee.id === user.id) {
+        this.showAssigneeDropdown = false;
+        return;
+      }
+      
+      try {
+        this.isUpdating = true;
+        
+        // Create a copy of the task to update
+        const updatedTask = { ...this.task, assignee_id: user.id };
+        
+        // Call the API to update the task
+        const response = await taskService.update(this.task.id, updatedTask);
+        
+        // Emit an event to notify parent component
+        this.$emit('task-updated', response.data);
+        
+        // Close the dropdown
+        this.showAssigneeDropdown = false;
+      } catch (error) {
+        console.error('Error updating task assignee:', error);
+        alert('Failed to update assignee. Please try again.');
+      } finally {
+        this.isUpdating = false;
+      }
     },
     async handleFileUpload(event) {
       const files = event.target.files;
@@ -311,15 +453,26 @@ export default {
     },
     // Method to handle clicks outside the dropdown
     handleClickOutside(event) {
-      const dropdown = this.$el.querySelector('.status-dropdown');
-      if (dropdown && !dropdown.contains(event.target)) {
+      // Handle clicks outside status dropdown
+      const statusDropdown = this.$el.querySelector('.status-dropdown');
+      if (statusDropdown && !statusDropdown.contains(event.target)) {
         this.showStatusDropdown = false;
+      }
+      
+      // Handle clicks outside assignee dropdown
+      const assigneeDropdown = this.$el.querySelector('.assignee-dropdown');
+      if (assigneeDropdown && !assigneeDropdown.contains(event.target)) {
+        const addAssigneeBtn = this.$el.querySelector('.add-assignee-btn');
+        if (addAssigneeBtn && !addAssigneeBtn.contains(event.target)) {
+          this.showAssigneeDropdown = false;
+        }
       }
     }
   },
   // Close dropdown when clicking outside
   mounted() {
     document.addEventListener('click', this.handleClickOutside);
+    this.loadUsers();
   },
   beforeUnmount() {
     document.removeEventListener('click', this.handleClickOutside);
@@ -540,6 +693,144 @@ export default {
 
 .add-attachment-btn:hover {
   background-color: rgba(138, 86, 255, 0.2);
+}
+
+/* Assignee styles */
+.assignee-selector {
+  position: relative;
+  width: 100%;
+}
+
+.assignees-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.assignee-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.assignee-avatar {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #8a56ff;
+  color: white;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.assignee-name {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.no-assignee {
+  font-size: 0.85rem;
+  color: #777;
+  font-style: italic;
+  margin-bottom: 0.5rem;
+}
+
+.add-assignee-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background-color: rgba(138, 86, 255, 0.1);
+  color: #8a56ff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.add-assignee-btn:hover {
+  background-color: rgba(138, 86, 255, 0.2);
+}
+
+.assignee-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 200px;
+  max-height: 250px;
+  background-color: #2a2a2a;
+  border-radius: 6px;
+  overflow: hidden;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 0.15s ease;
+}
+
+.search-container {
+  padding: 0.6rem;
+  border-bottom: 1px solid #333;
+}
+
+.assignee-search {
+  width: 100%;
+  padding: 0.5rem;
+  background-color: #252525;
+  border: none;
+  border-radius: 4px;
+  color: #ccc;
+  font-size: 0.8rem;
+}
+
+.assignee-search:focus {
+  outline: none;
+}
+
+.assignee-list {
+  overflow-y: auto;
+  max-height: 200px;
+  padding: 0.4rem 0;
+}
+
+.assignee-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.assignee-option:hover {
+  background-color: #333;
+}
+
+.no-results, .loading-users {
+  padding: 0.75rem;
+  font-size: 0.8rem;
+  color: #777;
+  text-align: center;
+}
+
+.loading-users {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.spinner.small {
+  width: 14px;
+  height: 14px;
 }
 
 .empty-attachments {

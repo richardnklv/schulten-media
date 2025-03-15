@@ -165,7 +165,7 @@ export default {
   overflow-y: auto;
   min-height: 200px;
   position: relative;
-  z-index: 110; /* Higher than the selective overlay */
+  z-index: 100; /* Higher than the selective overlay */
 }
 
 /* Priority separator styling - Zen UI/UX */

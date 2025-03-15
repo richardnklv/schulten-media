@@ -126,6 +126,8 @@ export default {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   margin-bottom: 0.75rem;
   position: relative;
+  /* Ensure task items don't appear above modals */
+  z-index: 1;
 }
 
 .task-item:hover {
@@ -186,7 +188,8 @@ export default {
   margin-left: auto;
   white-space: nowrap;
   position: relative;
-  z-index: 2; /* Ensure it sits above the avatars */
+  /* Use a local z-index to position within task item */
+  z-index: 1; 
   min-width: 5rem; /* Increased to fit longer statuses */
   text-align: center;
 }
@@ -221,6 +224,8 @@ export default {
   right: 7rem; /* Further increased padding for longer status text */
   transform: translateY(-50%);
   transition: opacity 0.2s ease;
+  /* Lower z-index to ensure it doesn't appear above modals */
+  z-index: 1;
 }
 
 .assignee-mini-avatars.hidden {
@@ -241,6 +246,9 @@ export default {
   color: white;
   transition: all 0.2s ease;
   border: 1px solid #2a2a2a;
+  /* Lower z-index for avatars stacked within task item */
+  position: relative;
+  z-index: 1;
 }
 
 .assignee-mini-avatar.more-indicator {
