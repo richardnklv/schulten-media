@@ -91,20 +91,33 @@ export default {
   },
   
   async updatePriority(id, priority) {
-    const response = await apiClient.put(`/tasks/${id}/priority`, { priority });
+    console.log('taskService.updatePriority called with:', { id, priority });
+    console.log('Request payload:', JSON.stringify({ priority }));
     
-    // Add notification for priority update
-    const task = response.data;
-    notificationService.addNotification({
-      type: 'task_priority_changed',
-      title: 'Task Priority Changed',
-      content: `Task "${task.title}" priority set to ${priority}`,
-      time: new Date(),
-      entityId: id,
-      entityType: 'task'
-    });
-    
-    return response;
+    try {
+      const response = await apiClient.put(`/tasks/${id}/priority`, { priority });
+      
+      // Add notification for priority update
+      const task = response.data;
+      notificationService.addNotification({
+        type: 'task_priority_changed',
+        title: 'Task Priority Changed',
+        content: `Task "${task.title}" priority set to ${priority}`,
+        time: new Date(),
+        entityId: id,
+        entityType: 'task'
+      });
+      
+      return response;
+    } catch (error) {
+      console.error('Error in updatePriority:', error);
+      if (error.response) {
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+        console.error('Response headers:', error.response.headers);
+      }
+      throw error;
+    }
   },
   
   // Method for adding file attachments to an existing task

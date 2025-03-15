@@ -481,25 +481,32 @@ export default {
       selectedProject.value = projectId;
     };
     
-    // Method to update a task's priority
-    const updateTaskPriority = async (updatedTask) => {
+    // Simple method to update a task's priority
+    const updateTaskPriority = async (task) => {
+      // Basic validation
+      if (!task || !task.id || !task.priority) {
+        console.error('Missing required task data:', task);
+        return;
+      }
+      
+      console.log('DashboardContainer: Updating task priority for task ID:', task.id, 'to', task.priority);
+      
       try {
-        // API call to update the task
-        const response = await taskService.update(updatedTask.id, updatedTask);
+        // Simple call to the taskService
+        await taskService.updatePriority(task.id, task.priority);
         
-        // Update the task in our local array
-        const index = tasks.value.findIndex(t => t.id === updatedTask.id);
+        // Update local task in the tasks array
+        const index = tasks.value.findIndex(t => t.id === task.id);
         if (index !== -1) {
-          tasks.value[index] = updatedTask;
+          tasks.value[index].priority = task.priority;
         }
         
-        // If this is the currently selected task, update that as well
-        if (selectedTask.value && selectedTask.value.id === updatedTask.id) {
-          selectedTask.value = updatedTask;
+        // Update the selected task if it's the same one
+        if (selectedTask.value && selectedTask.value.id === task.id) {
+          selectedTask.value.priority = task.priority;
         }
       } catch (error) {
         console.error('Error updating task priority:', error);
-        // Show a simple notification
         alert('Failed to update task priority. Please try again.');
       }
     };

@@ -1,4 +1,5 @@
 import { createApp } from 'vue';
+import { createPinia } from 'pinia';
 import App from './components/App.vue';
 import router from './router';
 import axios from 'axios';
@@ -23,7 +24,11 @@ if (authService.isLoggedIn()) {
     axios.defaults.headers.common['Authorization'] = `Bearer ${authService.getToken()}`;
 }
 
-// Create Vue app with router
+// Create Pinia instance
+const pinia = createPinia();
+
+// Create Vue app with router and Pinia
 const app = createApp(App);
 app.use(router);
+app.use(pinia);
 app.mount('#app');
