@@ -73,3 +73,11 @@
 
 
   - PINIA across whole VueJS
+
+
+    1. Notifications in the backend - You need a basic      
+  real-time notification system
+  2. Testing - Add a few key tests for API endpoints      
+  and core functionality
+  3. Documentation - A clear README.md explaining
+  setup, architecture, and features

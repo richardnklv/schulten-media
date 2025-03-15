@@ -1,8 +1,8 @@
 <!-- resources/js/components/TaskPanel.vue -->
 <template>
-  <div class="task-panel" :class="{ 'is-dragging': isDragging }">
+  <div class="task-panel" :class="{ 'is-dragging': taskStore.isDragging }">
     <!-- Selective overlay when dragging - covers everything except priority tabs and task list -->
-    <div v-if="isDragging" class="selective-overlay">
+    <div v-if="taskStore.isDragging" class="selective-overlay">
       <!-- Cutouts for the priority tabs will be handled with CSS z-index -->
     </div>
     
@@ -18,7 +18,7 @@
       :priorities="priorities" 
       :selectedPriority="selectedPriority" 
       :dragOverPriority="dragOverPriority"
-      :isDragging="isDragging"
+      :isDragging="taskStore.isDragging"
       @update-priority="selectPriority"
       @drag-over-priority="handleDragOverPriority"
       @drag-leave-priority="handleDragLeavePriority"
@@ -36,10 +36,7 @@
       :searchQuery="searchQuery" 
       :selectedTaskId="selectedTaskId"
       :priorities="priorities"
-      :isDragging="isDragging"
       @select-task="$emit('select-task', $event)"
-      @update-task-priority="updateTaskPriority"
-      @drag-end="handleDragEnd"
     />
     
     <AddTask @add-task="$emit('add-task')" />
@@ -53,6 +50,7 @@ import PriorityTabs from './task-panel/PriorityTabs.vue';
 import TaskFilter from './task-panel/TaskFilter.vue';
 import TaskList from './task-panel/TaskList.vue';
 import AddTask from './task-panel/AddTask.vue';
+import { useTaskStore } from '../stores/taskStore';
 
 export default {
   name: 'TaskPanel',
@@ -64,11 +62,13 @@ export default {
     TaskList,
     AddTask
   },
+  setup() {
+    const taskStore = useTaskStore();
+    return { taskStore };
+  },
   data() {
     return {
       searchQuery: '',
-      isDragging: false,
-      draggedTask: null,
       dragOverPriority: null
     }
   },
@@ -129,7 +129,7 @@ export default {
       this.$emit('update-status', status);
     },
     handleDragOverPriority(priority) {
-      if (this.isDragging) {
+      if (this.taskStore.isDragging) {
         this.dragOverPriority = priority;
       }
     },
@@ -139,25 +139,11 @@ export default {
     handleDropOnPriority(priority) {
       const validPriorities = ['Must be done', 'Important', 'Good to have'];
       
-      if (this.draggedTask && 
-          this.draggedTask.priority !== priority && 
-          validPriorities.includes(priority)) {
-        console.log('TaskPanel: Handling drop on priority', priority, 'for task', this.draggedTask.id);
-        this.updateTaskPriority(this.draggedTask, priority);
-      } else if (!validPriorities.includes(priority)) {
-        console.error('Invalid priority value for drop:', priority);
+      if (this.taskStore.draggedTaskId && validPriorities.includes(priority)) {
+        // Let the store handle the priority update
+        this.taskStore.handlePriorityDrop(priority);
       }
       
-      this.dragOverPriority = null;
-    },
-    updateTaskPriority(task) {
-      // Simple pass-through to parent
-      console.log('TaskPanel passing task update to parent:', task);
-      this.$emit('update-task-priority', task);
-    },
-    handleDragEnd() {
-      this.isDragging = false;
-      this.draggedTask = null;
       this.dragOverPriority = null;
     }
   }

@@ -61,12 +61,20 @@ export default {
     };
   },
   mounted() {
-    // Get initial notifications
-    this.updateNotifications();
+    console.log('NotificationsPanel mounted, fetching notifications...');
+    
+    // Get initial notifications from API
+    notificationService.fetchNotifications().then(() => {
+      console.log('Initial fetch complete');
+      this.updateNotifications();
+    });
     
     // Set up interval to refresh notifications (every 10 seconds)
     this.interval = setInterval(() => {
-      this.updateNotifications();
+      console.log('Refreshing notifications...');
+      notificationService.fetchNotifications().then(() => {
+        this.updateNotifications();
+      });
     }, 10000);
   },
   beforeUnmount() {
@@ -77,20 +85,23 @@ export default {
     updateNotifications() {
       this.notifications = notificationService.getNotifications();
     },
-    markAsRead(id) {
-      notificationService.markAsRead(id);
+    async markAsRead(id) {
+      await notificationService.markAsRead(id);
       this.updateNotifications();
     },
-    markAllAsRead() {
-      notificationService.markAllAsRead();
+    async markAllAsRead() {
+      await notificationService.markAllAsRead();
       this.updateNotifications();
     },
-    clearAllNotifications() {
-      notificationService.clearAll();
+    async clearAllNotifications() {
+      await notificationService.clearAll();
       this.updateNotifications();
     },
     formatTime(timestamp) {
-      const date = new Date(timestamp);
+      if (!timestamp) return '';
+      
+      // Handle both date strings from the API and Date objects from local notifications
+      const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
       const now = new Date();
       const diffMs = now - date;
       const diffMins = Math.round(diffMs / 60000);

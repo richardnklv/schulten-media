@@ -7,6 +7,7 @@ use App\Http\Controllers\API\ProjectController;
 use App\Http\Controllers\API\CommentController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\UserController;
+use App\Http\Controllers\API\NotificationController;
 
 
 Route::get('/test', function () {
@@ -38,6 +39,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/tasks/{task}/comments', [CommentController::class, 'store']);
     Route::put('/comments/{comment}', [CommentController::class, 'update']);
     Route::delete('/comments/{comment}', [CommentController::class, 'destroy']);
+    
+    // Notification routes
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::put('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
+    Route::put('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy']);
+    Route::delete('/notifications', [NotificationController::class, 'clearAll']);
     
     Route::post('/logout', [AuthController::class, 'logout']);
 });

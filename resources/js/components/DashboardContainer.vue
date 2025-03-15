@@ -31,7 +31,6 @@
           @select-task="selectTask"
           @update-priority="updatePriority"
           @update-status="updateStatus"
-          @update-task-priority="updateTaskPriority"
           @add-task="showAddTaskForm = true"
         />
       </div>
@@ -128,10 +127,11 @@ import TaskPanel from './TaskPanel.vue';
 import DetailPanel from './DetailPanel.vue';
 import ResizableSplitter from './ResizableSplitter.vue';
 import taskService from '../services/taskService.js';
+import { useTaskStore } from '../stores/taskStore';
 import projectService from '../services/projectService.js';
 import userService from '../services/userService.js';
 import commentService from '../services/commentService.js';
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 
 export default {
   name: 'DashboardContainer',
@@ -142,6 +142,9 @@ export default {
     ResizableSplitter
   },
   setup() {
+    // Initialize the task store
+    const taskStore = useTaskStore();
+    
     // State
     const tasks = ref([]);
     const projects = ref([]);
@@ -290,8 +293,8 @@ export default {
     
     const fetchTasks = async () => {
       try {
-        const response = await taskService.getAll();
-        tasks.value = response.data.data || response.data;
+        await taskStore.fetchTasks();
+        tasks.value = taskStore.tasks;
       } catch (error) {
         console.error('Error fetching tasks:', error);
       }
@@ -481,37 +484,13 @@ export default {
       selectedProject.value = projectId;
     };
     
-    // Simple method to update a task's priority
-    const updateTaskPriority = async (task) => {
-      // Basic validation
-      if (!task || !task.id || !task.priority) {
-        console.error('Missing required task data:', task);
-        return;
-      }
-      
-      console.log('DashboardContainer: Updating task priority for task ID:', task.id, 'to', task.priority);
-      
-      try {
-        // Simple call to the taskService
-        await taskService.updatePriority(task.id, task.priority);
-        
-        // Update local task in the tasks array
-        const index = tasks.value.findIndex(t => t.id === task.id);
-        if (index !== -1) {
-          tasks.value[index].priority = task.priority;
-        }
-        
-        // Update the selected task if it's the same one
-        if (selectedTask.value && selectedTask.value.id === task.id) {
-          selectedTask.value.priority = task.priority;
-        }
-      } catch (error) {
-        console.error('Error updating task priority:', error);
-        alert('Failed to update task priority. Please try again.');
-      }
-    };
+    // Update tasks when taskStore changes 
+    watch(() => taskStore.tasks, (newTasks) => {
+      tasks.value = newTasks;
+    });
     
     return {
+      taskStore,
       tasks,
       projects,
       users,
@@ -541,7 +520,6 @@ export default {
       handleRightResize,
       toggleSidebar,
       filterTasksByProject,
-      updateTaskPriority,
       checkAuth
     };
   }

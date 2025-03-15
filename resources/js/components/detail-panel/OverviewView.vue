@@ -1,228 +1,77 @@
 <template>
-  <div class="progress-overview">
-    <div class="focus-progress">
-      <h2>Focus Progress</h2>
-      <p class="progress-subtitle">Building mindful productivity</p>
-      
-      <!-- Time Range Selector -->
-      <div class="time-range-selector">
-        <button 
-          v-for="range in timeRanges" 
-          :key="range.value" 
-          :class="['range-btn', { active: activeTimeRange === range.value }]"
-          @click="activeTimeRange = range.value"
+  <div class="overview-container">
+    <h2>This Week</h2>
+    <p class="overview-subtitle">{{ weekRange }}</p>
+    
+    <div class="week-grid">
+      <!-- Day headers -->
+      <div class="day-headers">
+        <div 
+          v-for="day in weekdays" 
+          :key="day.date" 
+          class="day-label"
+          :class="{ 'current-day': day.isToday }"
         >
-          {{ range.label }}
-        </button>
-      </div>
-      
-      <!-- Today's Summary -->
-      <div v-if="activeTimeRange === 'today'" class="time-summary">
-        <div class="summary-header">
-          <h3>Today's Focus</h3>
-          <span class="date">{{ todayDate }}</span>
-        </div>
-        
-        <div class="focus-stats">
-          <div class="time-block">
-            <span class="focus-time">{{ stats.today.totalTime }}</span>
-            <span class="focus-goal">Goal: {{ stats.today.goal }}</span>
-            <span class="focus-complete">{{ stats.today.percentage }}% Complete</span>
-          </div>
-          
-          <div class="progress-circle">
-            <svg viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="45" fill="transparent" stroke="#2a2a2a" stroke-width="5" />
-              <circle 
-                cx="50" 
-                cy="50" 
-                r="45" 
-                fill="transparent" 
-                stroke="#8a56ff" 
-                stroke-width="5" 
-                stroke-dasharray="282.7"
-                :stroke-dashoffset="getTodayOffset"
-                transform="rotate(-90 50 50)"
-              />
-            </svg>
-            <div class="progress-text">
-              <span class="percentage">{{ stats.today.percentage }}%</span>
-              <span class="label">of daily goal</span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="task-completion-list">
-          <h4>Tasks Completed Today</h4>
-          <div v-if="stats.today.completedTasks.length === 0" class="empty-list">
-            No tasks completed yet today
-          </div>
-          <div v-else class="completed-tasks">
-            <div v-for="(task, index) in stats.today.completedTasks" :key="index" class="completed-task-item">
-              <div class="task-info">
-                <span class="task-title">{{ task.title }}</span>
-                <span class="task-project">{{ task.project }}</span>
-              </div>
-              <span class="task-time">{{ task.timeSpent }}</span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="due-today-list">
-          <h4>Due Today</h4>
-          <div v-if="stats.today.dueTasks.length === 0" class="empty-list">
-            No tasks due today
-          </div>
-          <div v-else class="due-tasks">
-            <div v-for="(task, index) in stats.today.dueTasks" :key="index" class="due-task-item">
-              <div class="task-info">
-                <span class="task-title">{{ task.title }}</span>
-                <span :class="['task-status', 'status-' + task.status.toLowerCase().replace(' ', '-')]">
-                  {{ task.status }}
-                </span>
-              </div>
-              <span class="task-progress">{{ task.progress }}%</span>
-            </div>
-          </div>
+          <span class="day-name">{{ day.name }}</span>
+          <span class="day-date">{{ day.shortDate }}</span>
         </div>
       </div>
       
-      <!-- This Week's Summary -->
-      <div v-if="activeTimeRange === 'week'" class="time-summary">
-        <div class="summary-header">
-          <h3>This Week's Focus</h3>
-          <span class="date">{{ weekRange }}</span>
-        </div>
-        
-        <div class="focus-stats">
-          <div class="time-block">
-            <span class="focus-time">{{ stats.week.totalTime }}</span>
-            <span class="focus-goal">Goal: {{ stats.week.goal }}</span>
-            <span class="focus-complete">{{ stats.week.percentage }}% Complete</span>
-          </div>
+      <!-- Tasks grid -->
+      <div class="tasks-grid">
+        <div 
+          v-for="day in weekdays" 
+          :key="day.date" 
+          class="day-column"
+          :class="{ 'current-day': day.isToday }"
+        >
+          <div v-if="day.tasks.length === 0" class="empty-day"></div>
           
-          <div class="progress-circle">
-            <svg viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="45" fill="transparent" stroke="#2a2a2a" stroke-width="5" />
-              <circle 
-                cx="50" 
-                cy="50" 
-                r="45" 
-                fill="transparent" 
-                stroke="#8a56ff" 
-                stroke-width="5" 
-                stroke-dasharray="282.7"
-                :stroke-dashoffset="getWeekOffset"
-                transform="rotate(-90 50 50)"
-              />
-            </svg>
-            <div class="progress-text">
-              <span class="percentage">{{ stats.week.percentage }}%</span>
-              <span class="label">of weekly goal</span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="weekly-overview">
-          <h4>Daily Breakdown</h4>
-          <div class="chart-container">
-            <div class="chart-bars">
-              <div 
-                v-for="(day, index) in stats.week.dailyBreakdown" 
-                :key="index" 
-                class="chart-bar" 
-                :style="{ height: day.percentage + '%' }"
-              >
-                <span class="bar-tooltip">{{ day.hours }}</span>
-              </div>
-            </div>
-            <div class="chart-labels">
-              <span v-for="(day, index) in stats.week.dailyBreakdown" :key="index">
-                {{ day.label }}
-              </span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="focus-metrics">
-          <div class="metric-card">
-            <h4>Tasks Completed</h4>
-            <div class="metric-value">{{ stats.week.tasksCompleted }}</div>
-          </div>
-          
-          <div class="metric-card">
-            <h4>Avg. Focus per Day</h4>
-            <div class="metric-value">{{ stats.week.avgFocusPerDay }}</div>
+          <div 
+            v-for="task in day.tasks" 
+            :key="task.id" 
+            class="task-item"
+            :class="[`priority-${getPriorityClass(task.priority)}`, `status-${getStatusClass(task.status)}`]"
+          >
+            <span class="task-title">{{ task.title }}</span>
           </div>
         </div>
       </div>
+    </div>
+    
+    <!-- Legend -->
+    <div class="task-legend">
+      <div class="legend-priority">
+        <div class="legend-item">
+          <span class="legend-color priority-must-be-done"></span>
+          <span class="legend-text">Must be done</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color priority-important"></span>
+          <span class="legend-text">Important</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color priority-good-to-have"></span>
+          <span class="legend-text">Good to have</span>
+        </div>
+      </div>
       
-      <!-- This Month's Summary -->
-      <div v-if="activeTimeRange === 'month'" class="time-summary">
-        <div class="summary-header">
-          <h3>This Month's Focus</h3>
-          <span class="date">{{ monthName }}</span>
+      <div class="legend-status">
+        <div class="legend-item">
+          <span class="legend-dot status-to-do"></span>
+          <span class="legend-text">To Do</span>
         </div>
-        
-        <div class="focus-stats">
-          <div class="time-block">
-            <span class="focus-time">{{ stats.month.totalTime }}</span>
-            <span class="focus-goal">Goal: {{ stats.month.goal }}</span>
-            <span class="focus-complete">{{ stats.month.percentage }}% Complete</span>
-          </div>
-          
-          <div class="progress-circle">
-            <svg viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="45" fill="transparent" stroke="#2a2a2a" stroke-width="5" />
-              <circle 
-                cx="50" 
-                cy="50" 
-                r="45" 
-                fill="transparent" 
-                stroke="#8a56ff" 
-                stroke-width="5" 
-                stroke-dasharray="282.7"
-                :stroke-dashoffset="getMonthOffset"
-                transform="rotate(-90 50 50)"
-              />
-            </svg>
-            <div class="progress-text">
-              <span class="percentage">{{ stats.month.percentage }}%</span>
-              <span class="label">of monthly goal</span>
-            </div>
-          </div>
+        <div class="legend-item">
+          <span class="legend-dot status-in-progress"></span>
+          <span class="legend-text">In Progress</span>
         </div>
-        
-        <div class="monthly-heatmap">
-          <h4>Focus Intensity</h4>
-          <div class="heatmap-container">
-            <div 
-              v-for="(day, index) in stats.month.heatmap" 
-              :key="index" 
-              class="heatmap-day" 
-              :class="'intensity-' + day.intensity"
-              :title="day.date + ': ' + day.hours"
-            ></div>
-          </div>
+        <div class="legend-item">
+          <span class="legend-dot status-under-review"></span>
+          <span class="legend-text">Under Review</span>
         </div>
-        
-        <div class="monthly-metrics">
-          <div class="metric-card">
-            <h4>Focus Days</h4>
-            <div class="metric-value">{{ stats.month.focusDays }}</div>
-            <div class="metric-label">out of {{ stats.month.totalDays }}</div>
-          </div>
-          
-          <div class="metric-card">
-            <h4>Most Focused Day</h4>
-            <div class="metric-value">{{ stats.month.mostFocusedDay.date }}</div>
-            <div class="metric-label">{{ stats.month.mostFocusedDay.hours }}</div>
-          </div>
-          
-          <div class="metric-card">
-            <h4>Tasks Completed</h4>
-            <div class="metric-value">{{ stats.month.tasksCompleted }}</div>
-          </div>
+        <div class="legend-item">
+          <span class="legend-dot status-completed"></span>
+          <span class="legend-text">Completed</span>
         </div>
       </div>
     </div>
@@ -230,464 +79,333 @@
 </template>
 
 <script>
+import taskService from '../../services/taskService';
+
 export default {
   name: 'OverviewView',
-  props: {
-    stats: {
-      type: Object,
-      required: true
-    }
-  },
   data() {
     return {
-      activeTimeRange: 'today', // Default to weekly view
-      timeRanges: [
-        { value: 'today', label: 'Today' },
-        { value: 'week', label: 'This Week' },
-        { value: 'month', label: 'This Month' }
-      ]
+      tasks: [],
+      loading: false,
+      error: null,
+      weekdays: []
+    }
+  },
+  mounted() {
+    this.fetchTasks();
+    this.generateWeekDays();
+  },
+  methods: {
+    async fetchTasks() {
+      this.loading = true;
+      try {
+        const response = await taskService.getAll();
+        this.tasks = response.data;
+        this.assignTasksToDays();
+      } catch (error) {
+        this.error = 'Failed to load tasks';
+        console.error('Error fetching tasks:', error);
+      } finally {
+        this.loading = false;
+      }
+    },
+    
+    generateWeekDays() {
+      const today = new Date();
+      const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      
+      // Find the date of the Monday of this week
+      const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
+      const monday = new Date(today);
+      monday.setDate(today.getDate() + mondayOffset);
+      
+      // Generate array of weekdays from Monday to Sunday
+      this.weekdays = [];
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(monday);
+        date.setDate(monday.getDate() + i);
+        
+        this.weekdays.push({
+          name: date.toLocaleDateString('en-US', { weekday: 'short' }),
+          date: date.toISOString().split('T')[0], // YYYY-MM-DD format
+          shortDate: date.getDate(), // Day of month (1-31)
+          isToday: this.isSameDay(date, today),
+          tasks: []
+        });
+      }
+    },
+    
+    assignTasksToDays() {
+      // First clear any existing tasks
+      this.weekdays.forEach(day => {
+        day.tasks = [];
+      });
+      
+      // Then assign tasks to the appropriate day based on due date
+      this.tasks.forEach(task => {
+        const dueDate = task.due_date.split('T')[0]; // Get YYYY-MM-DD from ISO date
+        
+        // Find matching day
+        const dayIndex = this.weekdays.findIndex(day => day.date === dueDate);
+        if (dayIndex !== -1) {
+          this.weekdays[dayIndex].tasks.push(task);
+        }
+      });
+      
+      // Sort tasks by priority (highest first)
+      this.weekdays.forEach(day => {
+        day.tasks.sort((a, b) => {
+          const priorityOrder = {
+            'Must be done': 0,
+            'Important': 1,
+            'Good to have': 2
+          };
+          
+          return priorityOrder[a.priority] - priorityOrder[b.priority];
+        });
+      });
+    },
+    
+    isSameDay(date1, date2) {
+      return date1.getDate() === date2.getDate() &&
+             date1.getMonth() === date2.getMonth() &&
+             date1.getFullYear() === date2.getFullYear();
+    },
+    
+    getPriorityClass(priority) {
+      return priority.toLowerCase().replace(/\s+/g, '-');
+    },
+    
+    getStatusClass(status) {
+      return status.toLowerCase().replace(/\s+/g, '-');
     }
   },
   computed: {
-    getTodayOffset() {
-      const circumference = 2 * Math.PI * 45;
-      return circumference - (circumference * this.stats.today.percentage / 100);
-    },
-    getWeekOffset() {
-      const circumference = 2 * Math.PI * 45;
-      return circumference - (circumference * this.stats.week.percentage / 100);
-    },
-    getMonthOffset() {
-      const circumference = 2 * Math.PI * 45;
-      return circumference - (circumference * this.stats.month.percentage / 100);
-    },
-    todayDate() {
-      return new Date().toLocaleDateString(undefined, { 
-        weekday: 'long', 
-        month: 'long', 
-        day: 'numeric' 
-      });
-    },
     weekRange() {
-      const today = new Date();
-      const startOfWeek = new Date(today);
-      const day = startOfWeek.getDay();
-      const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday as first day
-      startOfWeek.setDate(diff);
+      if (this.weekdays.length === 0) return '';
       
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(endOfWeek.getDate() + 6);
+      const firstDay = this.weekdays[0].date;
+      const lastDay = this.weekdays[6].date;
       
-      return `${startOfWeek.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${endOfWeek.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
-    },
-    monthName() {
-      return new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      const formatDate = (dateStr) => {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric'
+        });
+      };
+      
+      return `${formatDate(firstDay)} - ${formatDate(lastDay)}`;
     }
   }
 }
 </script>
 
 <style scoped>
-/* Progress Overview */
-.progress-overview {
-  padding: 1.25rem;
+.overview-container {
+  padding: 2rem;
+  height: 100%;
   overflow-y: auto;
+  color: #e0e0e0;
 }
 
-.focus-progress h2 {
-  font-size: 1.2rem;
-  font-weight: 500;
-  margin-bottom: 0.25rem;
-  margin-top: 0;
-  letter-spacing: 0.5px;
-}
-
-.progress-subtitle {
-  color: #999;
-  margin-bottom: 1.25rem;
-  font-size: 0.8rem;
-}
-
-/* Time Range Selector */
-.time-range-selector {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-  background-color: #252525;
-  padding: 0.4rem;
-  border-radius: 6px;
-}
-
-.range-btn {
-  flex: 1;
-  padding: 0.5rem 0;
-  border: none;
-  background-color: transparent;
-  color: #999;
-  font-size: 0.8rem;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.range-btn:hover {
-  color: #fff;
-}
-
-.range-btn.active {
-  background-color: #2a2a2a;
-  color: #fff;
-}
-
-/* Time Summary (Common Elements) */
-.time-summary {
-  margin-bottom: 1rem;
-}
-
-.summary-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.summary-header h3 {
-  font-size: 1rem;
+h2 {
+  font-size: 1.1rem;
   font-weight: 500;
   margin: 0;
   letter-spacing: 0.5px;
 }
 
-.summary-header .date {
-  font-size: 0.8rem;
-  color: #999;
-}
-
-.focus-stats {
-  display: flex;
-  margin-bottom: 1.5rem;
-  padding: 1.25rem;
-  background-color: #252525;
-  border-radius: 6px;
-}
-
-.time-block {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.focus-time {
-  font-size: 1.8rem;
-  font-weight: 500;
-}
-
-.focus-goal {
+.overview-subtitle {
   font-size: 0.75rem;
-  color: #999;
+  color: #888;
+  margin-top: 0.25rem;
+  margin-bottom: 2rem;
 }
 
-.focus-complete {
-  font-size: 0.75rem;
-  color: #ccc;
+.week-grid {
+  margin-bottom: 2rem;
 }
 
-.progress-circle {
-  position: relative;
-  width: 120px;
-  height: 120px;
+.day-headers {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
-.progress-circle svg {
-  width: 100%;
-  height: 100%;
-}
-
-.progress-text {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-}
-
-.progress-text .percentage {
-  font-size: 1.2rem;
-  font-weight: 500;
-  display: block;
-}
-
-.progress-text .label {
-  font-size: 0.7rem;
-  color: #999;
-}
-
-/* Today View Specific */
-.task-completion-list,
-.due-today-list {
-  background-color: #252525;
-  padding: 1.25rem;
-  border-radius: 6px;
-  margin-bottom: 1.5rem;
-}
-
-.task-completion-list h4,
-.due-today-list h4 {
-  font-size: 0.9rem;
-  margin-top: 0;
-  margin-bottom: 1rem;
-  font-weight: 500;
-  letter-spacing: 0.5px;
-}
-
-.empty-list {
-  color: #999;
-  font-style: italic;
-  font-size: 0.8rem;
+.day-label {
   text-align: center;
   padding: 0.5rem 0;
 }
 
-.completed-task-item,
-.due-task-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.75rem;
-  background-color: #2a2a2a;
-  border-radius: 6px;
-  margin-bottom: 0.5rem;
+.day-name {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #bbb;
 }
 
-.task-info {
+.day-date {
+  display: block;
+  font-size: 0.7rem;
+  color: #777;
+  margin-top: 0.15rem;
+}
+
+.current-day .day-name {
+  color: #8a56ff;
+}
+
+.tasks-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.5rem;
+  min-height: 300px;
+}
+
+.day-column {
+  background-color: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+  padding: 0.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.5rem;
+}
+
+.day-column.current-day {
+  background-color: rgba(138, 86, 255, 0.05);
+}
+
+.empty-day {
+  flex: 1;
+}
+
+.task-item {
+  background-color: #2a2a2a;
+  border-radius: 3px;
+  padding: 0.5rem;
+  border-left: 3px solid;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.task-item:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
 }
 
 .task-title {
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.task-project {
   font-size: 0.7rem;
-  color: #999;
-}
-
-.task-time {
-  font-size: 0.8rem;
-  color: #8a56ff;
-  font-weight: 500;
-}
-
-.task-status {
-  font-size: 0.7rem;
-  padding: 0.1rem 0.5rem;
-  border-radius: 10px;
-  display: inline-block;
-}
-
-.status-to-do {
-  color: #999;
-  background-color: rgba(153, 153, 153, 0.1);
-}
-
-.status-in-progress {
-  color: #3498db;
-  background-color: rgba(52, 152, 219, 0.1);
-}
-
-.status-under-review {
-  color: #9b59b6;
-  background-color: rgba(155, 89, 182, 0.1);
-}
-
-.status-completed {
-  color: #2ecc71;
-  background-color: rgba(46, 204, 113, 0.1);
-}
-
-.task-progress {
-  font-size: 0.8rem;
-  font-weight: 500;
-}
-
-/* Week View Specific */
-.weekly-overview {
-  background-color: #252525;
-  padding: 1.25rem;
-  border-radius: 6px;
-  margin-bottom: 1.5rem;
-}
-
-.weekly-overview h4 {
-  font-size: 0.9rem;
-  margin-top: 0;
-  margin-bottom: 1rem;
-  font-weight: 500;
-  letter-spacing: 0.5px;
-}
-
-.chart-container {
-  height: 180px;
-}
-
-.chart-bars {
-  display: flex;
-  height: 150px;
-  align-items: flex-end;
-  gap: 0.6rem;
-  margin-bottom: 0.4rem;
-}
-
-.chart-bar {
-  flex: 1;
-  background: linear-gradient(to top, #8a56ff, #e040fb);
-  border-radius: 4px 4px 0 0;
-  position: relative;
-  transition: all 0.3s ease;
-}
-
-.chart-bar:hover {
-  transform: translateY(-5px);
-}
-
-.bar-tooltip {
-  position: absolute;
-  top: -25px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: #333;
-  color: #fff;
-  font-size: 0.7rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.3s ease;
 }
 
-.chart-bar:hover .bar-tooltip {
-  opacity: 1;
+/* Priority colors */
+.priority-must-be-done {
+  border-left-color: #ff5252;
 }
 
-.chart-labels {
-  display: flex;
-  gap: 0.6rem;
+.priority-important {
+  border-left-color: #ffb142;
 }
 
-.chart-labels span {
-  flex: 1;
-  text-align: center;
-  font-size: 0.7rem;
-  color: #999;
+.priority-good-to-have {
+  border-left-color: #2ecc71;
 }
 
-.focus-metrics {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
-}
-
-.metric-card {
-  background-color: #252525;
-  padding: 1rem;
-  border-radius: 6px;
-  text-align: center;
-}
-
-.metric-card h4 {
-  font-size: 0.8rem;
-  color: #999;
-  margin-top: 0;
-  margin-bottom: 0.4rem;
-  font-weight: normal;
-  letter-spacing: 0.5px;
-}
-
-.metric-card .metric-value {
-  font-size: 1.2rem;
-  font-weight: 500;
-}
-
-.metric-card .metric-label {
-  font-size: 0.7rem;
-  color: #999;
-  margin-top: 0.2rem;
-}
-
-/* Month View Specific */
-.monthly-heatmap {
-  background-color: #252525;
-  padding: 1.25rem;
-  border-radius: 6px;
-  margin-bottom: 1.5rem;
-}
-
-.monthly-heatmap h4 {
-  font-size: 0.9rem;
-  margin-top: 0;
-  margin-bottom: 1rem;
-  font-weight: 500;
-  letter-spacing: 0.5px;
-}
-
-.heatmap-container {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.3rem;
-}
-
-.heatmap-day {
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: 2px;
-  transition: transform 0.15s ease;
-}
-
-.heatmap-day:hover {
-  transform: scale(1.2);
-}
-
-.intensity-0 {
+/* Status styles */
+.status-to-do {
   background-color: #2a2a2a;
 }
 
-.intensity-1 {
-  background-color: rgba(138, 86, 255, 0.2);
+.status-in-progress {
+  background-color: rgba(52, 152, 219, 0.15);
 }
 
-.intensity-2 {
-  background-color: rgba(138, 86, 255, 0.4);
+.status-under-review {
+  background-color: rgba(155, 89, 182, 0.15);
 }
 
-.intensity-3 {
-  background-color: rgba(138, 86, 255, 0.6);
+.status-completed {
+  background-color: rgba(46, 204, 113, 0.15);
 }
 
-.intensity-4 {
-  background-color: rgba(138, 86, 255, 0.9);
+/* Legend */
+.task-legend {
+  display: flex;
+  justify-content: space-between;
+  padding: 1rem;
+  background-color: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
 }
 
-.monthly-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+.legend-priority, .legend-status {
+  display: flex;
   gap: 1rem;
 }
 
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.legend-color.priority-must-be-done {
+  background-color: #ff5252;
+}
+
+.legend-color.priority-important {
+  background-color: #ffb142;
+}
+
+.legend-color.priority-good-to-have {
+  background-color: #2ecc71;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-dot.status-to-do {
+  background-color: #aaa;
+}
+
+.legend-dot.status-in-progress {
+  background-color: #3498db;
+}
+
+.legend-dot.status-under-review {
+  background-color: #9b59b6;
+}
+
+.legend-dot.status-completed {
+  background-color: #2ecc71;
+}
+
+.legend-text {
+  font-size: 0.65rem;
+  color: #999;
+}
+
 @media (max-width: 768px) {
-  .focus-stats {
+  .task-legend {
     flex-direction: column;
     gap: 1rem;
   }
   
-  .monthly-metrics {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .monthly-metrics .metric-card:last-child {
-    grid-column: span 2;
+  .legend-priority, .legend-status {
+    justify-content: space-between;
   }
 }
 </style>

@@ -51,6 +51,8 @@
 <script>
 import TaskItem from './TaskItem.vue';
 import draggable from 'vuedraggable';
+import { useTaskStore } from '../../stores/taskStore';
+import { computed } from 'vue';
 
 export default {
   name: 'TaskList',
@@ -81,63 +83,24 @@ export default {
       ]
     }
   },
-  data() {
-    return {
-      isDragging: false,
-      draggedTask: null
-    }
+  setup() {
+    const taskStore = useTaskStore();
+    return { taskStore };
   },
   computed: {
+    // Get tasks filtered by search query
     displayedTasks() {
-      if (!this.searchQuery.trim()) {
-        return this.tasks;
-      }
-      
-      // Remove multiple spaces and convert to lowercase for more flexible search
-      const query = this.searchQuery.toLowerCase().replace(/\s+/g, ' ').trim();
-      // Also create a version with spaces removed entirely for even more flexible matching
-      const noSpacesQuery = query.replace(/\s+/g, '');
-      
-      return this.tasks.filter(task => {
-        const titleLower = task.title.toLowerCase();
-        const descLower = task.description ? task.description.toLowerCase() : '';
-        const titleNoSpaces = titleLower.replace(/\s+/g, '');
-        const descNoSpaces = descLower.replace(/\s+/g, '');
-        
-        // Try multiple matching approaches for better user experience
-        return titleLower.includes(query) || 
-               descLower.includes(query) ||
-               titleNoSpaces.includes(noSpacesQuery) ||
-               descNoSpaces.includes(noSpacesQuery);
-      });
+      return this.taskStore.searchTasks(this.searchQuery, this.tasks);
     },
     
     // Group tasks by priority for draggable sections
     groupedTasks() {
-      // First get the filtered tasks from the search
-      const filteredTasks = this.displayedTasks;
-      
-      // Group them by priority
-      const grouped = {};
-      
-      // Make sure all priority groups exist even if empty
-      this.priorities.forEach(priority => {
-        if (priority.value !== 'all') {
-          grouped[priority.value] = [];
-        }
-      });
-      
-      // Populate with tasks
-      filteredTasks.forEach(task => {
-        if (task.priority && task.priority !== 'all') {
-          if (!grouped[task.priority]) {
-            grouped[task.priority] = [];
-          }
-          grouped[task.priority].push(task);
-        }
-      });
-      
-      return grouped;
+      return this.taskStore.getTasksGroupedByPriority(this.priorities, this.displayedTasks);
+    },
+    
+    // Check if currently dragging (from store)
+    isDragging() {
+      return this.taskStore.isDragging;
     },
     
     // This is used for the v-model in draggable components
@@ -153,71 +116,40 @@ export default {
   },
   methods: {
     onDragStart(event) {
-      this.isDragging = true;
-      this.draggedTask = event.item.__draggable_context.element;
-      
-      // Store the original priority for comparison later
-      if (this.draggedTask) {
-        this.draggedTask._originalPriority = this.draggedTask.priority;
-        console.log('Started dragging task:', this.draggedTask.id, 'with priority:', this.draggedTask.priority);
-      }
-    },
-    
-    onDragEnd(event) {
-      // If we have a dragged task and it's in a new container, update priority
-      if (this.draggedTask) {
-        const containerEl = event.to;
-        // The parent element of the draggable container has our priority data
-        const priorityGroup = containerEl.parentElement.getAttribute('data-priority');
-        
-        // Check if priority changed
-        if (priorityGroup && this.draggedTask._originalPriority !== priorityGroup) {
-          console.log('TaskList: Updating task', this.draggedTask.id, 'priority from', 
-                     this.draggedTask._originalPriority, 'to', priorityGroup);
-          
-          // Make a clean copy of just the required data
-          const taskUpdate = {
-            id: this.draggedTask.id,
-            priority: priorityGroup
-          };
-          
-          // Send to parent for API update
-          this.$emit('update-task-priority', taskUpdate);
-        }
-      }
-      
-      this.isDragging = false;
-      this.draggedTask = null;
-      this.$emit('drag-end');
-    },
-    
-    onDragChange(event) {
-      // We handle priority changes in the onDragEnd method for simplicity
-      console.log('Task moved');
-    },
-    
-    updateTaskPriority(task, newPriority) {
-      // Ensure we have a task object with an id
-      if (!task || !task.id) {
-        console.error('Cannot update priority: Invalid task object', task);
+      const taskElement = event.item.__draggable_context.element;
+      if (!taskElement || !taskElement.id) {
+        console.error('Invalid task element:', taskElement);
         return;
       }
       
-      console.log('TaskList is updating priority for task ID:', task.id, 'New priority:', newPriority);
+      // Use the store to track dragging state and task
+      this.taskStore.startDragging(taskElement.id);
+    },
+    
+    onDragEnd(event) {
+      // If we don't have a dragged task in the store, just end the operation
+      if (!this.taskStore.draggedTaskId) {
+        this.taskStore.endDragging();
+        return;
+      }
       
-      // Show full task object for debugging
-      console.log('Original task object:', JSON.stringify(task));
+      const containerEl = event.to;
+      if (!containerEl || !containerEl.parentElement) {
+        console.error('Invalid drop container');
+        this.taskStore.endDragging();
+        return;
+      }
       
-      // Create a copy of the task with the new priority
-      const updatedTask = { 
-        ...task, 
-        priority: newPriority 
-      };
+      // Get priority from container attribute
+      const newPriority = containerEl.parentElement.getAttribute('data-priority');
       
-      console.log('Updated task object to emit:', JSON.stringify(updatedTask));
-      
-      // Emit the update event to parent component
-      this.$emit('update-task-priority', updatedTask);
+      // Handle the drop in the store - this will update priority if needed
+      this.taskStore.handlePriorityDrop(newPriority);
+    },
+    
+    onDragChange(event) {
+      // We handle priority changes in the onDragEnd method
+      console.log('Task moved');
     }
   }
 }

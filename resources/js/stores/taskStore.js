@@ -1,17 +1,25 @@
 import { defineStore } from 'pinia';
 import taskService from '../services/taskService';
 
-export const taskStore = defineStore('tasks', {
+export const useTaskStore = defineStore('tasks', {
   state: () => ({
     tasks: [],
     loading: false,
     error: null,
     // Track drag operation
     isDragging: false,
-    draggedTaskId: null
+    draggedTaskId: null,
+    // Store original priority during drag
+    originalPriority: null
   }),
   
   getters: {
+    // Get dragged task object
+    draggedTask: (state) => {
+      if (!state.draggedTaskId) return null;
+      return state.tasks.find(task => task.id === state.draggedTaskId);
+    },
+    
     // Filter tasks by priority
     getTasksByPriority: (state) => (priority) => {
       if (priority === 'all') return state.tasks;
@@ -154,11 +162,61 @@ export const taskStore = defineStore('tasks', {
       }
     },
     
+    // Start drag operation
+    startDragging(taskId) {
+      const task = this.tasks.find(t => t.id === taskId);
+      if (!task) return;
+      
+      console.log('Store: Starting drag for task ID:', taskId);
+      this.isDragging = true;
+      this.draggedTaskId = taskId;
+      this.originalPriority = task.priority;
+    },
+    
+    // End drag operation
+    endDragging() {
+      console.log('Store: Ending drag operation');
+      this.isDragging = false;
+      this.draggedTaskId = null;
+      this.originalPriority = null;
+    },
+    
+    // Handle drop in a new priority group
+    handlePriorityDrop(newPriority) {
+      if (!this.draggedTaskId || !newPriority) {
+        console.error('Missing task ID or priority for drop operation');
+        return false;
+      }
+      
+      // Check if priority actually changed
+      if (this.originalPriority === newPriority) {
+        console.log('Priority unchanged, skipping update');
+        this.endDragging();
+        return false;
+      }
+      
+      console.log(`Store: Dropping task ${this.draggedTaskId} to ${newPriority}`);
+      this.updateTaskPriority(this.draggedTaskId, newPriority);
+      this.endDragging();
+      return true;
+    },
+    
     // Update task priority (used with drag and drop)
     async updateTaskPriority(taskId, newPriority) {
+      // Validate inputs
+      if (!taskId || !newPriority) {
+        console.error('Missing task ID or priority');
+        return;
+      }
+      
+      console.log(`Store: Updating task ${taskId} priority to ${newPriority}`);
+      
       // First, optimistically update the local state for immediate UI feedback
       const taskIndex = this.tasks.findIndex(task => task.id === taskId);
-      if (taskIndex === -1) return;
+      if (taskIndex === -1) {
+        console.error('Task not found in store:', taskId);
+        return;
+      }
       
       const originalPriority = this.tasks[taskIndex].priority;
       
@@ -168,25 +226,14 @@ export const taskStore = defineStore('tasks', {
       try {
         // Then update on the server
         await taskService.updatePriority(taskId, newPriority);
+        console.log('Priority updated successfully on server');
       } catch (error) {
         // Revert the change if the server update fails
+        console.error('Error updating priority on server, reverting local change');
         this.tasks[taskIndex].priority = originalPriority;
         this.error = error.message || 'Failed to update task priority';
-        console.error('Error updating task priority:', error);
         throw error;
       }
-    },
-    
-    // Start drag operation
-    startDragging(taskId) {
-      this.isDragging = true;
-      this.draggedTaskId = taskId;
-    },
-    
-    // End drag operation
-    endDragging() {
-      this.isDragging = false;
-      this.draggedTaskId = null;
     },
     
     // Add attachments to a task

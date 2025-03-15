@@ -8,7 +8,7 @@ class Task extends Model
 {
     //
 
-    protected $fillable = ['project_id', 'title', 'description', 'due_date', 'priority', 'status', 'assignee_id'];
+    protected $fillable = ['project_id', 'title', 'description', 'due_date', 'priority', 'status', 'assignee_id', 'creator_id'];
 
     public function project() {
         return $this->belongsTo(Project::class);
@@ -16,6 +16,10 @@ class Task extends Model
 
     public function assignee() {
         return $this->belongsTo(User::class, 'assignee_id');
+    }
+    
+    public function creator() {
+        return $this->belongsTo(User::class, 'creator_id');
     }
 
     public function comments() {
